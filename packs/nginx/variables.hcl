@@ -17,10 +17,16 @@ variable "region" {
   default     = "global"
 }
 
-variable "consul_service_name" {
-  description = "The consul service you wish to load balance"
+variable "namespace" {
+  description = "The namespace where the job should be placed"
   type        = string
-  default     = "webapp"
+  default     = "default"
+}
+
+variable "type" {
+  description = "The scheduler to use for the job"
+  type        = string
+  default     = "system"
 }
 
 variable "version_tag" {
@@ -45,4 +51,10 @@ variable "resources" {
     cpu    = 200,
     memory = 256
   }
+}
+
+variable "default_domain" {
+  description = "The default domain to use when the service doesn't define a server name"
+  type        = string
+  default     = ""
 }

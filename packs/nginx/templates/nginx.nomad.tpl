@@ -1,12 +1,8 @@
 job [[ template "job_name" . ]] {
   [[ template "region" . ]]
   datacenters = [ [[ range $idx, $dc := .nginx.datacenters ]][[if $idx]],[[end]][[ $dc | quote ]][[ end ]] ]
-
-  // must have linux for network mode
-  constraint {
-    attribute = "${attr.kernel.name}"
-    value     = "linux"
-  }
+  namespace   = [[ .nginx.namespace | quote ]]
+  type        = [[ .nginx.type | quote ]]
 
   group "nginx" {
     count = 1
@@ -36,20 +32,55 @@ job [[ template "job_name" . ]] {
 
       template {
         data = <<EOF
-upstream backend {
-{{ range service [[ .nginx.consul_service_name | quote ]] }}
+{{- range services -}}
+{{- with service .Name -}}
+{{- with index . 0 -}}
+{{- if eq (index .ServiceMeta "nomad_ingress_nginx_enabled") "true" -}}
+upstream {{ .Name | toLower }} {
+  {{- range service .Name }}
   server {{ .Address }}:{{ .Port }};
-{{ else }}server 127.0.0.1:65535; # force a 502
-{{ end }}
+  {{- end }}
 }
 
 server {
    listen [[ .nginx.http_port ]];
+   {{- if (index .ServiceMeta "nomad_ingress_nginx_server_name") }}
+   server_name {{ index .ServiceMeta "nomad_ingress_nginx_server_name" }};
+   {{- else }}
+   server_name {{ .Name}}.[[ .nginx.domain ]];
+   {{- end }}
 
    location / {
-      proxy_pass http://backend;
+      proxy_pass http://{{ .Name | toLower }};
    }
 }
+{{- else if .Tags | contains "nomad_ingress_nginx_enabled=true" -}}
+upstream {{ .Name | toLower }} {
+  {{- range service .Name }}
+  server {{ .Address }}:{{ .Port }};
+  {{- end }}
+}
+
+server {
+   listen [[ .nginx.http_port ]];
+   {{- $server_name_key := (print "server_name_" .Name) -}}
+   {{- range .Tags -}}
+   {{- if eq (index (. | split "=") 0) "nomad_ingress_nginx_server_name" -}}
+   {{- scratch.Set $server_name_key (index (. | split "=")  1) -}}
+   {{- end -}}
+   {{- end -}}
+   {{ if scratch.Key $server_name_key }}
+   server_name {{ scratch.Get $server_name_key }};
+   {{- end }}
+
+   location / {
+      proxy_pass http://{{ .Name | toLower }};
+   }
+}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
 EOF
 
         destination   = "local/load-balancer.conf"
