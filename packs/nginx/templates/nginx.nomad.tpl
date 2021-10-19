@@ -34,8 +34,10 @@ job [[ template "job_name" . ]] {
         data = <<EOF
 {{- range services -}}
 {{- with service .Name -}}
-{{- with index . 0 -}}
-{{- if eq (index .ServiceMeta "nomad_ingress_nginx_enabled") "true" -}}
+{{- with index . 0 }}
+{{- if eq (index .ServiceMeta "nomad_ingress_nginx_enabled") "true" }}
+# Configuration for service {{ .Name }}.
+# This block is automatically managed by this job and should not be modified.
 upstream {{ .Name | toLower }} {
   {{- range service .Name }}
   server {{ .Address }}:{{ .Port }};
@@ -54,7 +56,9 @@ server {
       proxy_pass http://{{ .Name | toLower }};
    }
 }
-{{- else if .Tags | contains "nomad_ingress_nginx_enabled=true" -}}
+{{ else if .Tags | contains "nomad_ingress_nginx_enabled=true" }}
+# Configuration for service {{ .Name }}.
+# This block is automatically managed by this job and should not be modified.
 upstream {{ .Name | toLower }} {
   {{- range service .Name }}
   server {{ .Address }}:{{ .Port }};
@@ -71,16 +75,18 @@ server {
    {{- end -}}
    {{ if scratch.Key $server_name_key }}
    server_name {{ scratch.Get $server_name_key }};
+   {{- else }}
+   server_name {{ .Name}}.[[ .nginx.domain ]];
    {{- end }}
 
    location / {
       proxy_pass http://{{ .Name | toLower }};
    }
 }
+{{ end }}
 {{- end -}}
 {{- end -}}
-{{- end -}}
-{{- end }}
+{{ end }}
 EOF
 
         destination   = "local/load-balancer.conf"
